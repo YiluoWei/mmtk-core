@@ -186,8 +186,8 @@ impl<VM: VMBinding> PageResource<VM> for MonotonePageResource<VM> {
 
     fn adjust_for_metadata(&self, pages: usize) -> usize {
         pages
-            + ((pages + PAGES_IN_REGION - 1) >> LOG_PAGES_IN_REGION)
-                * self.meta_data_pages_per_region
+            // + ((pages + PAGES_IN_REGION - 1) >> LOG_PAGES_IN_REGION)
+                // * self.meta_data_pages_per_region
     }
 }
 

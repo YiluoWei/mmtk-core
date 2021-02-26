@@ -1,6 +1,6 @@
 use crate::util::constants::DEFAULT_STRESS_FACTOR;
 use std::sync::atomic::Ordering;
-
+use std::ops::AddAssign;
 use super::allocator::{align_allocation_no_fill, fill_alignment_gap};
 use crate::util::Address;
 
@@ -175,7 +175,7 @@ impl<VM: VMBinding> BumpAllocator<VM> {
         stress_test: bool,
     ) -> Address {
         let block_size = (size + BLOCK_MASK) & (!BLOCK_MASK);
-        let acquired_start = self
+        let mut acquired_start = self
             .space
             .unwrap()
             .acquire(self.tls, bytes_to_pages(block_size));
@@ -183,6 +183,9 @@ impl<VM: VMBinding> BumpAllocator<VM> {
             trace!("Failed to acquire a new block");
             acquired_start
         } else {
+            if acquired_start == acquired_start.align_down(1 << 22) {
+                acquired_start.add_assign(0x80000 as usize);
+            }
             trace!(
                 "Acquired a new block of size {} with start address {}",
                 block_size,

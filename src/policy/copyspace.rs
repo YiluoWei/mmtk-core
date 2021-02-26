@@ -10,13 +10,14 @@ use crate::util::heap::VMRequest;
 use crate::util::heap::{MonotonePageResource, PageResource};
 use crate::util::{Address, ObjectReference};
 use crate::vm::*;
+use crate::util::alloc::embedded_meta_data;
 use libc::{mprotect, PROT_EXEC, PROT_NONE, PROT_READ, PROT_WRITE};
 use std::cell::UnsafeCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 unsafe impl<VM: VMBinding> Sync for CopySpace<VM> {}
 
-const META_DATA_PAGES_PER_REGION: usize = CARD_META_PAGES_PER_REGION;
+const META_DATA_PAGES_PER_REGION: usize = embedded_meta_data::META_DATA_PAGES_IN_REGION;
 
 pub struct CopySpace<VM: VMBinding> {
     common: UnsafeCell<CommonSpace<VM>>,

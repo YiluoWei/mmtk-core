@@ -2,6 +2,7 @@ use crate::util::side_metadata::*;
 use crate::util::ObjectReference;
 use crate::vm::ObjectModel;
 use crate::vm::VMBinding;
+use crate::util::alloc::embedded_meta_data;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use super::constants;
@@ -24,15 +25,23 @@ const SIDE_GC_BYTE_SPEC: SideMetadataSpec = SideMetadataSpec {
 /// Otherwise, MMTk provides the metadata on its side.
 ///
 fn get_gc_byte<VM: VMBinding>(object: ObjectReference) -> &'static AtomicU8 {
-    debug_assert!(VM::VMObjectModel::HAS_GC_BYTE);
-    unsafe { &*(object.to_address() + VM::VMObjectModel::GC_BYTE_OFFSET).to_ptr::<AtomicU8>() }
+    if VM::VMObjectModel::HAS_GC_BYTE {
+        unsafe { &*(object.to_address() + VM::VMObjectModel::GC_BYTE_OFFSET).to_ptr::<AtomicU8>() }
+    } else {
+        unsafe {
+            &*(embedded_meta_data::get_metadata_base(object.to_address()) + 
+                embedded_meta_data::get_metadata_offset(object.to_address(), 0, 0)).to_ptr::<AtomicU8>()
+        }
+    }
+    
 }
 
 /// Atomically reads the current value of an object's GC byte.
 ///
 /// Returns an 8-bit unsigned integer
 pub fn read_gc_byte<VM: VMBinding>(object: ObjectReference) -> u8 {
-    if VM::VMObjectModel::HAS_GC_BYTE {
+    // if VM::VMObjectModel::HAS_GC_BYTE {
+    if true {
         get_gc_byte::<VM>(object).load(Ordering::SeqCst)
     } else {
         // is safe, because we only assign SIDE_GCBYTE_ID once
@@ -42,7 +51,8 @@ pub fn read_gc_byte<VM: VMBinding>(object: ObjectReference) -> u8 {
 
 /// Atomically writes a new value to the GC byte of an object
 pub fn write_gc_byte<VM: VMBinding>(object: ObjectReference, val: u8) {
-    if VM::VMObjectModel::HAS_GC_BYTE {
+    // if VM::VMObjectModel::HAS_GC_BYTE {
+    if true {
         get_gc_byte::<VM>(object).store(val, Ordering::SeqCst);
     } else {
         // is safe, because we only assign SIDE_GCBYTE_ID once
@@ -58,7 +68,8 @@ pub fn compare_exchange_gc_byte<VM: VMBinding>(
     old_val: u8,
     new_val: u8,
 ) -> bool {
-    if VM::VMObjectModel::HAS_GC_BYTE {
+    // if VM::VMObjectModel::HAS_GC_BYTE {
+    if true {
         get_gc_byte::<VM>(object)
             .compare_exchange(old_val, new_val, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()

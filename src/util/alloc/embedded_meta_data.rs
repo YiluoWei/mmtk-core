@@ -7,6 +7,8 @@ pub const BYTES_IN_REGION: usize = 1 << LOG_BYTES_IN_REGION;
 pub const REGION_MASK: usize = BYTES_IN_REGION - 1;
 pub const LOG_PAGES_IN_REGION: usize = LOG_BYTES_IN_REGION - LOG_BYTES_IN_PAGE as usize;
 pub const PAGES_IN_REGION: usize = 1 << LOG_PAGES_IN_REGION;
+pub const LOG_META_DATA_PAGES_IN_REGION: usize = 7;
+pub const META_DATA_PAGES_IN_REGION: usize = 1 << LOG_META_DATA_PAGES_IN_REGION;
 
 #[inline]
 pub fn get_metadata_base(address: Address) -> Address {
@@ -15,5 +17,6 @@ pub fn get_metadata_base(address: Address) -> Address {
 
 #[inline]
 pub fn get_metadata_offset(address: Address, log_coverage: usize, log_align: usize) -> usize {
-    ((address & REGION_MASK) >> (log_coverage + log_align)) << log_align
+    ((address & REGION_MASK) - (META_DATA_PAGES_IN_REGION << LOG_BYTES_IN_PAGE as usize)) >> 3
+    // ((address & REGION_MASK) >> (log_coverage + log_align)) << log_align
 }
