@@ -9,6 +9,7 @@ use std::marker::PhantomData;
 use std::mem;
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::Ordering;
+use crate::util::header_log_byte;
 
 pub struct ScheduleCollection;
 
@@ -471,7 +472,8 @@ impl<E: ProcessEdgesWork> GCWork<E::VM> for ProcessModBuf<E> {
     fn do_work(&mut self, worker: &mut GCWorker<E::VM>, mmtk: &'static MMTK<E::VM>) {
         if !self.modbuf.is_empty() {
             for obj in &self.modbuf {
-                compare_exchange_atomic(self.meta, obj.to_address(), 0b0, 0b1);
+                // compare_exchange_atomic(self.meta, obj.to_address(), 0b0, 0b1);
+                header_log_byte::spin_and_unlog_object(obj);
             }
         }
         if mmtk.plan.in_nursery() {

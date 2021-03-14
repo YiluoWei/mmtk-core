@@ -54,7 +54,8 @@ impl<VM: VMBinding> CopyContext for GenCopyCopyContext<VM> {
     ) {
         forwarding_word::clear_forwarding_bits::<VM>(obj);
         if !super::NO_SLOW {
-            store_atomic(super::LOGGING_META, obj.to_address(), 0b1);
+            header_log_byte::unlog_object(obj);
+            // store_atomic(super::LOGGING_META, obj.to_address(), 0b1);
         }
     }
 }
