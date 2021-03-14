@@ -1,7 +1,8 @@
 use crate::util::ObjectReference;
 use crate::vm::ObjectModel;
 use crate::vm::VMBinding;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
+use crate::util::Address;
 
 use super::constants;
 
@@ -49,7 +50,7 @@ pub fn compare_exchange_log_byte(
 
 pub fn spin_and_unlog_object(object: ObjectReference) {
     let header = get_header(object).load(Ordering::SeqCst);
-    let log_byte = header & 0b1111_1111 as u8;
+    let log_byte = (header & 0b1111_1111) as u8;
     if log_byte == UNLOGGED_NO_LOCK {
         return;
     }
@@ -63,7 +64,7 @@ pub fn spin_and_unlog_object(object: ObjectReference) {
     } else if lock_pattern == LIGHT_LOCK || lock_pattern == HEAVY_LOCK {
         info!("unlog locked object {}", object);
         let real_log_byte_addr = header & !(LOCK_MASK as usize);
-        let real_log_byte_slot = unsafe { Address::from_usize(real_log_byte_addr).to_ptr::<AtomicU8> };
+        let real_log_byte_slot = unsafe { &*(Address::from_usize(real_log_byte_addr)).to_ptr::<AtomicU8>() };
         let real_log_byte = real_log_byte_slot.load(Ordering::SeqCst);
         if real_log_byte == UNLOGGED_NO_LOCK {
             return;
@@ -74,6 +75,7 @@ pub fn spin_and_unlog_object(object: ObjectReference) {
     } else {
         panic!("Invalid lock pattern")
     }
+}
 
 pub fn unlog_object(object: ObjectReference) {
     let log_byte = read_log_byte(object);
@@ -83,12 +85,9 @@ pub fn unlog_object(object: ObjectReference) {
     } else if lock_pattern == LIGHT_LOCK || lock_pattern == HEAVY_LOCK {
         let header = get_header(object).load(Ordering::SeqCst);
         let real_log_byte_addr = header & !(LOCK_MASK as usize);
-        let real_log_byte_slot = unsafe { Address::from_usize(real_log_byte_addr).to_ptr::<AtomicU8> };
+        let real_log_byte_slot = unsafe { &*(Address::from_usize(real_log_byte_addr)).to_ptr::<AtomicU8>() };
         real_log_byte_slot.store(UNLOGGED_NO_LOCK, Ordering::SeqCst);
     } else {
         panic!("Invalid lock pattern")
     }
-
-}
-
 }

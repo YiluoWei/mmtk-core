@@ -23,6 +23,7 @@ pub mod opaque_pointer;
 pub mod options;
 pub mod raw_memory_freelist;
 pub mod reference_processor;
+pub mod header_log_byte;
 #[cfg(feature = "sanity")]
 pub mod sanity;
 pub mod side_metadata;

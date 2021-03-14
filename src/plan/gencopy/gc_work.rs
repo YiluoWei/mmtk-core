@@ -11,6 +11,7 @@ use crate::util::{Address, ObjectReference, OpaquePointer};
 use crate::vm::*;
 use crate::MMTK;
 use std::ops::{Deref, DerefMut};
+use crate::util::header_log_byte;
 
 pub struct GenCopyCopyContext<VM: VMBinding> {
     plan: &'static GenCopy<VM>,

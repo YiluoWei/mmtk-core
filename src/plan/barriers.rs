@@ -55,39 +55,35 @@ impl<E: ProcessEdgesWork, S: Space<E::VM>> ObjectRememberingBarrier<E, S> {
         if ENABLE_BARRIER_COUNTER {
             BARRIER_COUNTER.total.fetch_add(1, atomic::Ordering::SeqCst);
         }
-        // if compare_exchange_atomic(self.meta, obj.to_address(), 0b1, 0b0) {
-        //     if ENABLE_BARRIER_COUNTER {
-        //         BARRIER_COUNTER.slow.fetch_add(1, atomic::Ordering::SeqCst);
-        //     }
-        //     self.modbuf.push(obj);
-        //     if self.modbuf.len() >= E::CAPACITY {
-        //         self.flush();
-        //     }
-        // }
+
         let log_byte = header_log_byte::read_log_byte(obj);
         if log_byte == header_log_byte::NO_LOCK {
             return;
+        } 
+        self.modbuf.push(obj);
+        if self.modbuf.len() >= E::CAPACITY {
+            self.flush();
         }
         let lock_pattern = log_byte & header_log_byte::LOCK_MASK;
         if lock_pattern == header_log_byte::LIGHT_LOCK || lock_pattern == header_log_byte::HEAVY_LOCK {
-            if ENABLE_BARRIER_COUNTER {
-                BARRIER_COUNTER.slow.fetch_add(1, atomic::Ordering::SeqCst);
-            }
-            self.modbuf.push(obj);
-            if self.modbuf.len() >= E::CAPACITY {
-                self.flush();
-            }
+            // if ENABLE_BARRIER_COUNTER {
+            //     BARRIER_COUNTER.slow.fetch_add(1, atomic::Ordering::SeqCst);
+            // }
+            // self.modbuf.push(obj);
+            // if self.modbuf.len() >= E::CAPACITY {
+            //     self.flush();
+            // }
         } else if lock_pattern == header_log_byte::NO_LOCK {
-            if header_log_byte::compare_exchange_log_byte(obj, header_log_byte::UNLOGGED_NO_LOCK, header_log_byte::NO_LOCK); {                
-                if ENABLE_BARRIER_COUNTER {
-                    BARRIER_COUNTER.slow.fetch_add(1, atomic::Ordering::SeqCst);
-                }
-                self.modbuf.push(obj);
-                if self.modbuf.len() >= E::CAPACITY {
-                    self.flush();
-                }
+            if header_log_byte::compare_exchange_log_byte(obj, header_log_byte::UNLOGGED_NO_LOCK, header_log_byte::NO_LOCK) {                
+                // if ENABLE_BARRIER_COUNTER {
+                //     BARRIER_COUNTER.slow.fetch_add(1, atomic::Ordering::SeqCst);
+                // }
+                // self.modbuf.push(obj);
+                // if self.modbuf.len() >= E::CAPACITY {
+                //     self.flush();
+                // }
             } else {
-                self.enqueue_node(obj);
+                // self.enqueue_node(obj);
             }
         } else {
             panic!("Invalid lock pattern")
