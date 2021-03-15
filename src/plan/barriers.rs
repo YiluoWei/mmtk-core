@@ -51,39 +51,48 @@ impl<E: ProcessEdgesWork, S: Space<E::VM>> ObjectRememberingBarrier<E, S> {
     }
 
     #[inline(always)]
-    fn enqueue_node(&mut self, obj: ObjectReference) {
+    fn add_to_buf(&mut self, obj: ObjectReference) {
         if ENABLE_BARRIER_COUNTER {
-            BARRIER_COUNTER.total.fetch_add(1, atomic::Ordering::SeqCst);
+            BARRIER_COUNTER.slow.fetch_add(1, atomic::Ordering::SeqCst);
         }
-
-        let log_byte = header_log_byte::read_log_byte(obj);
-        if log_byte == header_log_byte::NO_LOCK {
-            return;
-        } 
         self.modbuf.push(obj);
         if self.modbuf.len() >= E::CAPACITY {
             self.flush();
         }
+    }
+
+    #[inline(always)]
+    fn enqueue_node(&mut self, obj: ObjectReference) {
+        if ENABLE_BARRIER_COUNTER {
+            BARRIER_COUNTER.total.fetch_add(1, atomic::Ordering::SeqCst);
+        }
+        let header = header_log_byte::read_header(obj);
+        let log_byte = (header & 0b1111_1111) as u8;
+        if log_byte == header_log_byte::NO_LOCK {
+            return;
+        } 
+        
         let lock_pattern = log_byte & header_log_byte::LOCK_MASK;
         if lock_pattern == header_log_byte::LIGHT_LOCK || lock_pattern == header_log_byte::HEAVY_LOCK {
-            // if ENABLE_BARRIER_COUNTER {
-            //     BARRIER_COUNTER.slow.fetch_add(1, atomic::Ordering::SeqCst);
-            // }
-            // self.modbuf.push(obj);
-            // if self.modbuf.len() >= E::CAPACITY {
-            //     self.flush();
-            // }
+            if header_log_byte::read_replaced_log_byte(header) == header_log_byte::NO_LOCK {
+                return;
+            } 
+            if header_log_byte::compare_exchange_replaced_log_byte(header, header_log_byte::UNLOGGED_NO_LOCK, header_log_byte::NO_LOCK) {
+                self.add_to_buf(obj);
+            } else {
+                // Spin here to make sure the object is logged, 
+                // the CAS may fail because the header is replaced when unlocking the object,
+                // in this case we can't just return
+                self.enqueue_node(obj);   
+            }
         } else if lock_pattern == header_log_byte::NO_LOCK {
             if header_log_byte::compare_exchange_log_byte(obj, header_log_byte::UNLOGGED_NO_LOCK, header_log_byte::NO_LOCK) {                
-                // if ENABLE_BARRIER_COUNTER {
-                //     BARRIER_COUNTER.slow.fetch_add(1, atomic::Ordering::SeqCst);
-                // }
-                // self.modbuf.push(obj);
-                // if self.modbuf.len() >= E::CAPACITY {
-                //     self.flush();
-                // }
+                self.add_to_buf(obj);
             } else {
-                // self.enqueue_node(obj);
+                // Spin here to make sure the object is logged, 
+                // the CAS may fail because the header is replaced when locking the object,
+                // in this case we can't just return
+                self.enqueue_node(obj);   
             }
         } else {
             panic!("Invalid lock pattern")
