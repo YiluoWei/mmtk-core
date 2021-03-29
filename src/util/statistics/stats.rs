@@ -169,9 +169,10 @@ impl Stats {
         }
         if ENABLE_BARRIER_COUNTER {
             let barrier_counter_results = BARRIER_COUNTER.get_results();
-            print!("{:.5}\t", barrier_counter_results.take_rate);
+            // print!("{:.5}\t", barrier_counter_results.take_rate);
             print!("{:.0}\t", barrier_counter_results.total);
-            print!("{:.0}\t", barrier_counter_results.slow);
+            print!("{:.0}\t", barrier_counter_results.locked);
+            print!("{:.0}\t", barrier_counter_results.locked_fast);
         }
         println!();
         print!("Total time: ");
@@ -195,9 +196,11 @@ impl Stats {
             print!("{}\t", name);
         }
         if ENABLE_BARRIER_COUNTER {
-            print!("barrier.takerate\t");
+            // print!("barrier.takerate\t");
             print!("barrier.total\t");
-            print!("barrier.slow\t");
+            // print!("barrier.slow\t");
+            print!("barrier.locked\t");
+            print!("barrier.locked_fast\t");
         }
         println!();
     }

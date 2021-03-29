@@ -52,9 +52,9 @@ impl<E: ProcessEdgesWork, S: Space<E::VM>> ObjectRememberingBarrier<E, S> {
 
     #[inline(always)]
     fn add_to_buf(&mut self, obj: ObjectReference) {
-        if ENABLE_BARRIER_COUNTER {
-            BARRIER_COUNTER.slow.fetch_add(1, atomic::Ordering::SeqCst);
-        }
+        // if ENABLE_BARRIER_COUNTER {
+        //     BARRIER_COUNTER.slow.fetch_add(1, atomic::Ordering::SeqCst);
+        // }
         self.modbuf.push(obj);
         if self.modbuf.len() >= E::CAPACITY {
             self.flush();
@@ -74,7 +74,13 @@ impl<E: ProcessEdgesWork, S: Space<E::VM>> ObjectRememberingBarrier<E, S> {
         
         let lock_pattern = log_byte & header_log_byte::LOCK_MASK;
         if lock_pattern == header_log_byte::LIGHT_LOCK || lock_pattern == header_log_byte::HEAVY_LOCK {
+            if ENABLE_BARRIER_COUNTER {
+                BARRIER_COUNTER.locked.fetch_add(1, atomic::Ordering::SeqCst);
+            }
             if header_log_byte::read_replaced_log_byte(header) == header_log_byte::NO_LOCK {
+                if ENABLE_BARRIER_COUNTER {
+                    BARRIER_COUNTER.locked_fast.fetch_add(1, atomic::Ordering::SeqCst);
+                }
                 return;
             } 
             if header_log_byte::compare_exchange_replaced_log_byte(header, header_log_byte::UNLOGGED_NO_LOCK, header_log_byte::NO_LOCK) {
@@ -83,7 +89,7 @@ impl<E: ProcessEdgesWork, S: Space<E::VM>> ObjectRememberingBarrier<E, S> {
                 // Spin here to make sure the object is logged, 
                 // the CAS may fail because the header is replaced when unlocking the object,
                 // in this case we can't just return
-                self.enqueue_node(obj);   
+                // self.enqueue_node(obj);   
             }
         } else if lock_pattern == header_log_byte::NO_LOCK {
             if header_log_byte::compare_exchange_log_byte(obj, header_log_byte::UNLOGGED_NO_LOCK, header_log_byte::NO_LOCK) {                
@@ -92,7 +98,7 @@ impl<E: ProcessEdgesWork, S: Space<E::VM>> ObjectRememberingBarrier<E, S> {
                 // Spin here to make sure the object is logged, 
                 // the CAS may fail because the header is replaced when locking the object,
                 // in this case we can't just return
-                self.enqueue_node(obj);   
+                // self.enqueue_node(obj);   
             }
         } else {
             panic!("Invalid lock pattern")
@@ -132,33 +138,42 @@ pub const ENABLE_BARRIER_COUNTER: bool = false;
 
 pub static BARRIER_COUNTER: BarrierCounter = BarrierCounter {
     total: AtomicUsize::new(0),
-    slow: AtomicUsize::new(0),
+    // slow: AtomicUsize::new(0),
+    locked: AtomicUsize::new(0),
+    locked_fast: AtomicUsize::new(0),
 };
 
 pub struct BarrierCounter {
     pub total: AtomicUsize,
-    pub slow: AtomicUsize,
+    // pub slow: AtomicUsize,
+    pub locked: AtomicUsize,
+    pub locked_fast: AtomicUsize,
 }
 
 pub struct BarrierCounterResults {
     pub total: f64,
-    pub slow: f64,
-    pub take_rate: f64,
+    pub locked: f64,
+    // pub slow: f64,
+    // pub take_rate: f64,
+    pub locked_fast: f64,
 }
 
 impl BarrierCounter {
     pub fn reset(&self) {
         self.total.store(0, Ordering::SeqCst);
-        self.slow.store(0, Ordering::SeqCst);
+        self.locked.store(0, Ordering::SeqCst);
+        self.locked_fast.store(0, Ordering::SeqCst);
     }
 
     pub fn get_results(&self) -> BarrierCounterResults {
         let total = self.total.load(Ordering::SeqCst) as f64;
-        let slow = self.slow.load(Ordering::SeqCst) as f64;
+        // let slow = self.slow.load(Ordering::SeqCst) as f64;
+        let locked = self.locked.load(Ordering::SeqCst) as f64;
+        let locked_fast = self.locked_fast.load(Ordering::SeqCst) as f64;
         BarrierCounterResults {
             total,
-            slow,
-            take_rate: slow / total,
+            locked,
+            locked_fast,
         }
     }
 }
