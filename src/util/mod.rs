@@ -29,6 +29,8 @@ pub mod side_metadata;
 pub mod statistics;
 mod synchronized_counter;
 pub mod treadmill;
+pub mod header_log_byte;
+
 
 #[cfg(test)]
 pub mod test_util;

@@ -16,6 +16,8 @@ use crate::util::side_metadata::{metadata_address_range_size, LOCAL_SIDE_METADAT
 use crate::util::Address;
 use crate::util::ObjectReference;
 
+use crate::util::header_log_byte;
+
 use std::collections::HashSet;
 use std::sync::RwLock;
 
@@ -82,7 +84,7 @@ pub fn map_meta_space_for_chunk(chunk_start: Address) {
         chunk_start,
         BYTES_IN_CHUNK,
         &[],
-        &[ALLOC_METADATA_SPEC, MARKING_METADATA_SPEC],
+        &[ALLOC_METADATA_SPEC],
     );
     debug_assert!(
         mmap_metadata_result.is_ok(),
@@ -123,23 +125,24 @@ pub fn is_alloced_object(address: Address) -> bool {
 }
 
 pub fn is_marked(object: ObjectReference) -> bool {
-    #[cfg(debug_assertions)]
-    if ASSERT_METADATA {
-        // Need to make sure we atomically access the side metadata and the map.
-        let lock = MARK_MAP.read().unwrap();
-        let ret = load_atomic(MARKING_METADATA_SPEC, object.to_address()) == 1;
-        debug_assert_eq!(
-            lock.contains(&unsafe { object.to_address().align_down(BYTES_IN_WORD).to_object_reference() }),
-            ret,
-            "is_marked(): mark bit does not match mark map, address = {} (aligned to {}), meta address = {}",
-            object.to_address(),
-            object.to_address().align_down(BYTES_IN_WORD),
-            address_to_meta_address(MARKING_METADATA_SPEC, object.to_address())
-        );
-        return ret;
-    }
+    // #[cfg(debug_assertions)]
+    // if ASSERT_METADATA {
+    //     // Need to make sure we atomically access the side metadata and the map.
+    //     let lock = MARK_MAP.read().unwrap();
+    //     let ret = load_atomic(MARKING_METADATA_SPEC, object.to_address()) == 1;
+    //     debug_assert_eq!(
+    //         lock.contains(&unsafe { object.to_address().align_down(BYTES_IN_WORD).to_object_reference() }),
+    //         ret,
+    //         "is_marked(): mark bit does not match mark map, address = {} (aligned to {}), meta address = {}",
+    //         object.to_address(),
+    //         object.to_address().align_down(BYTES_IN_WORD),
+    //         address_to_meta_address(MARKING_METADATA_SPEC, object.to_address())
+    //     );
+    //     return ret;
+    // }
 
-    load_atomic(MARKING_METADATA_SPEC, object.to_address()) == 1
+    header_log_byte::is_marked(object)
+    // load_atomic(MARKING_METADATA_SPEC, object.to_address()) == 1
 }
 
 pub fn set_alloc_bit(object: ObjectReference) {
@@ -156,16 +159,17 @@ pub fn set_alloc_bit(object: ObjectReference) {
 }
 
 pub fn set_mark_bit(object: ObjectReference) {
-    #[cfg(debug_assertions)]
-    if ASSERT_METADATA {
-        // Need to make sure we atomically access the side metadata and the map.
-        let mut lock = MARK_MAP.write().unwrap();
-        store_atomic(MARKING_METADATA_SPEC, object.to_address(), 1);
-        lock.insert(object);
-        return;
-    }
+    // #[cfg(debug_assertions)]
+    // if ASSERT_METADATA {
+    //     // Need to make sure we atomically access the side metadata and the map.
+    //     let mut lock = MARK_MAP.write().unwrap();
+    //     store_atomic(MARKING_METADATA_SPEC, object.to_address(), 1);
+    //     lock.insert(object);
+    //     return;
+    // }
 
-    store_atomic(MARKING_METADATA_SPEC, object.to_address(), 1);
+    header_log_byte::set_mark_bit(object);
+    // store_atomic(MARKING_METADATA_SPEC, object.to_address(), 1);
 }
 
 pub fn unset_alloc_bit(object: ObjectReference) {
@@ -182,14 +186,15 @@ pub fn unset_alloc_bit(object: ObjectReference) {
 }
 
 pub fn unset_mark_bit(object: ObjectReference) {
-    #[cfg(debug_assertions)]
-    if ASSERT_METADATA {
-        // Need to make sure we atomically access the side metadata and the map.
-        let mut lock = MARK_MAP.write().unwrap();
-        store_atomic(MARKING_METADATA_SPEC, object.to_address(), 0);
-        lock.remove(&object);
-        return;
-    }
+    // #[cfg(debug_assertions)]
+    // if ASSERT_METADATA {
+    //     // Need to make sure we atomically access the side metadata and the map.
+    //     let mut lock = MARK_MAP.write().unwrap();
+    //     store_atomic(MARKING_METADATA_SPEC, object.to_address(), 0);
+    //     lock.remove(&object);
+    //     return;
+    // }
 
-    store_atomic(MARKING_METADATA_SPEC, object.to_address(), 0);
+    header_log_byte::unset_mark_bit(object);
+    // store_atomic(MARKING_METADATA_SPEC, object.to_address(), 0);
 }
