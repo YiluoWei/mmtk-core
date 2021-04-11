@@ -71,43 +71,55 @@ pub fn write_replaced_log_byte(header: usize, val: u8) {
 }
 
 pub fn is_marked(object: ObjectReference) -> bool {
-    let header = read_header(object);
-    let log_byte = (header & 0b1111_1111) as u8;
-    let lock_pattern = log_byte & LOCK_MASK;
-    if lock_pattern == NO_LOCK {
-        return log_byte & LOG_BIT_MASK != 0;
-    } else if lock_pattern == LIGHT_LOCK || lock_pattern == HEAVY_LOCK {
-        let real_log_byte = read_replaced_log_byte(header);
-        return real_log_byte & LOG_BIT_MASK != 0;
-    } else {
-        panic!("Invalid lock pattern")
-    }
+    // let header = read_header(object);
+    // let log_byte = (header & 0b1111_1111) as u8;
+    // let lock_pattern = log_byte & LOCK_MASK;
+    // if lock_pattern == NO_LOCK {
+    //     return log_byte & LOG_BIT_MASK != 0;
+    // } else if lock_pattern == LIGHT_LOCK || lock_pattern == HEAVY_LOCK {
+    //     let real_log_byte = read_replaced_log_byte(header);
+    //     return real_log_byte & LOG_BIT_MASK != 0;
+    // } else {
+    //     panic!("Invalid lock pattern")
+    // }
+    let header_slot = unsafe { &*(object.to_address()).to_ptr::<AtomicUsize>() };
+    let header_val = header_slot.load(Ordering::SeqCst);
+    let mask = 1 << 63;
+    return header_val & mask != 0;
 }
 
 pub fn set_mark_bit(object: ObjectReference) {
-    let header = read_header(object);
-    let log_byte = (header & 0b1111_1111) as u8;
-    let lock_pattern = log_byte & LOCK_MASK;
-    if lock_pattern == NO_LOCK {
-        write_log_byte(object, log_byte | LOG_BIT_MASK);
-    } else if lock_pattern == LIGHT_LOCK || lock_pattern == HEAVY_LOCK {
-        write_replaced_log_byte(header, LOG_BIT_MASK | NO_LOCK);
-    } else {
-        panic!("Invalid lock pattern")
-    }
+    // let header = read_header(object);
+    // let log_byte = (header & 0b1111_1111) as u8;
+    // let lock_pattern = log_byte & LOCK_MASK;
+    // if lock_pattern == NO_LOCK {
+    //     write_log_byte(object, log_byte | LOG_BIT_MASK);
+    // } else if lock_pattern == LIGHT_LOCK || lock_pattern == HEAVY_LOCK {
+    //     write_replaced_log_byte(header, LOG_BIT_MASK | NO_LOCK);
+    // } else {
+    //     panic!("Invalid lock pattern")
+    // }
+    let header_slot = unsafe { &*(object.to_address()).to_ptr::<AtomicUsize>() };
+    let header_val = header_slot.load(Ordering::SeqCst);
+    let mask = 1 << 63;
+    header_slot.store(mask | header_val, Ordering::SeqCst);
 }
 
 pub fn unset_mark_bit(object: ObjectReference) {
-    let header = read_header(object);
-    let log_byte = (header & 0b1111_1111) as u8;
-    let lock_pattern = log_byte & LOCK_MASK;
-    if lock_pattern == NO_LOCK {
-        write_log_byte(object, log_byte & !LOG_BIT_MASK);
-    } else if lock_pattern == LIGHT_LOCK || lock_pattern == HEAVY_LOCK {
-        write_replaced_log_byte(header, NO_LOCK);
-    } else {
-        panic!("Invalid lock pattern")
-    }
+    // let header = read_header(object);
+    // let log_byte = (header & 0b1111_1111) as u8;
+    // let lock_pattern = log_byte & LOCK_MASK;
+    // if lock_pattern == NO_LOCK {
+    //     write_log_byte(object, log_byte & !LOG_BIT_MASK);
+    // } else if lock_pattern == LIGHT_LOCK || lock_pattern == HEAVY_LOCK {
+    //     write_replaced_log_byte(header, NO_LOCK);
+    // } else {
+    //     panic!("Invalid lock pattern")
+    // }
+    let header_slot = unsafe { &*(object.to_address()).to_ptr::<AtomicUsize>() };
+    let header_val = header_slot.load(Ordering::SeqCst);
+    let mask = 1 << 63;
+    header_slot.store(!mask & header_val, Ordering::SeqCst);
 }
 
 pub fn spin_and_unlog_object(object: ObjectReference) {
