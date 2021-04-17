@@ -1,6 +1,5 @@
 use crate::util::constants::DEFAULT_STRESS_FACTOR;
 use std::sync::atomic::Ordering;
-
 use super::allocator::{align_allocation_no_fill, fill_alignment_gap};
 use crate::util::Address;
 
@@ -12,9 +11,80 @@ use crate::util::conversions::bytes_to_pages;
 use crate::util::OpaquePointer;
 use crate::vm::{ActivePlan, VMBinding};
 
+use crate::util::constants;
+#[cfg(debug_assertions)]
+use crate::util::constants::BYTES_IN_WORD;
+use crate::util::conversions;
+use crate::util::heap::layout::vm_layout_constants::BYTES_IN_CHUNK;
+use crate::util::side_metadata::address_to_meta_address;
+use crate::util::side_metadata::load_atomic;
+#[cfg(target_pointer_width = "32")]
+use crate::util::side_metadata::meta_bytes_per_chunk;
+use crate::util::side_metadata::store_atomic;
+use crate::util::side_metadata::try_map_metadata_space;
+use crate::util::side_metadata::SideMetadataScope;
+use crate::util::side_metadata::SideMetadataSpec;
+#[cfg(target_pointer_width = "64")]
+use crate::util::side_metadata::{metadata_address_range_size, LOCAL_SIDE_METADATA_BASE_ADDRESS};
+use crate::util::ObjectReference;
+
+use std::collections::HashSet;
+use std::sync::RwLock;
+
+
 const BYTES_IN_PAGE: usize = 1 << 12;
 const BLOCK_SIZE: usize = 8 * BYTES_IN_PAGE;
 const BLOCK_MASK: usize = BLOCK_SIZE - 1;
+
+lazy_static! {
+    pub static ref ACTIVE_CHUNKS: RwLock<HashSet<Address>> = RwLock::default();
+}
+
+pub(super) const ALLOC_METADATA_SPEC: SideMetadataSpec = SideMetadataSpec {
+    scope: SideMetadataScope::PolicySpecific,
+    offset: LOCAL_SIDE_METADATA_BASE_ADDRESS.as_usize(),
+    log_num_of_bits: 0,
+    log_min_obj_size: constants::LOG_MIN_OBJECT_SIZE as usize,
+};
+
+pub fn is_meta_space_mapped(address: Address) -> bool {
+    let chunk_start = conversions::chunk_align_down(address);
+    ACTIVE_CHUNKS.read().unwrap().contains(&chunk_start)
+}
+
+// pub fn map_meta_space_for_chunk(address: Address) {
+pub fn map_meta_space_for_chunk() {
+    // let chunk_start = conversions::chunk_align_down(address);
+    // let mut active_chunks = ACTIVE_CHUNKS.write().unwrap();
+    // if active_chunks.contains(&chunk_start) {
+    //     return;
+    // }
+    // active_chunks.insert(chunk_start);
+    let mmap_metadata_result = try_map_metadata_space(
+        unsafe { Address::from_usize(0x20000000000) },
+        0x4000_0000,
+        &[],
+        &[ALLOC_METADATA_SPEC],
+    );
+    debug_assert!(
+        mmap_metadata_result.is_ok(),
+        "mmap sidemetadata failed for chunk_start ({})",
+        // chunk_start
+    );
+}
+
+pub fn set_alloc_bit(object: Address) {
+    // #[cfg(debug_assertions)]
+    // if ASSERT_METADATA {
+    //     // Need to make sure we atomically access the side metadata and the map.
+    //     let mut lock = ALLOC_MAP.write().unwrap();
+    //     store_atomic(ALLOC_METADATA_SPEC, object.to_address(), 1);
+    //     lock.insert(object);
+    //     return;
+    // }
+    trace!("set alloc bit for object 0x{}", object);
+    store_atomic(ALLOC_METADATA_SPEC, object, 1);
+}
 
 #[repr(C)]
 pub struct BumpAllocator<VM: VMBinding> {
@@ -57,7 +127,8 @@ impl<VM: VMBinding> Allocator<VM> for BumpAllocator<VM> {
 
         if new_cursor > self.limit {
             trace!("Thread local buffer used up, go to alloc slow path");
-            self.alloc_slow(size, align, offset)
+            let ret = self.alloc_slow(size, align, offset);
+            ret
         } else {
             fill_alignment_gap::<VM>(self.cursor, result);
             self.cursor = new_cursor;
@@ -68,6 +139,7 @@ impl<VM: VMBinding> Allocator<VM> for BumpAllocator<VM> {
                 self.cursor,
                 self.limit
             );
+            set_alloc_bit(result);
             result
         }
     }
@@ -77,10 +149,12 @@ impl<VM: VMBinding> Allocator<VM> for BumpAllocator<VM> {
         // TODO: internalLimit etc.
         let base = &self.plan.base();
 
-        if base.options.stress_factor == DEFAULT_STRESS_FACTOR
-            && base.options.analysis_factor == DEFAULT_STRESS_FACTOR
+        // if base.options.stress_factor == DEFAULT_STRESS_FACTOR
+        //     && base.options.analysis_factor == DEFAULT_STRESS_FACTOR
+        if true
         {
-            self.acquire_block(size, align, offset, false)
+            let ret = self.acquire_block(size, align, offset, false);
+            ret
         } else {
             self.alloc_slow_once_stress_test(size, align, offset)
         }
@@ -97,6 +171,7 @@ impl<VM: VMBinding> BumpAllocator<VM> {
         space: &'static dyn Space<VM>,
         plan: &'static dyn Plan<VM = VM>,
     ) -> Self {
+        map_meta_space_for_chunk();
         BumpAllocator {
             tls,
             cursor: unsafe { Address::zero() },
@@ -185,6 +260,7 @@ impl<VM: VMBinding> BumpAllocator<VM> {
                 block_size,
                 acquired_start
             );
+            // map_meta_space_for_chunk(acquired_start);
             if !stress_test {
                 self.set_limit(acquired_start, acquired_start + block_size);
             } else {
