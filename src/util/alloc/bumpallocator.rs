@@ -171,7 +171,7 @@ impl<VM: VMBinding> BumpAllocator<VM> {
         space: &'static dyn Space<VM>,
         plan: &'static dyn Plan<VM = VM>,
     ) -> Self {
-        map_meta_space_for_chunk();
+        // map_meta_space_for_chunk();
         BumpAllocator {
             tls,
             cursor: unsafe { Address::zero() },

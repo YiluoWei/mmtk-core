@@ -20,6 +20,7 @@ use crate::util::OpaquePointer;
 use crate::vm::VMBinding;
 use enum_map::EnumMap;
 use std::sync::Arc;
+use crate::util::alloc::bumpallocator;
 
 #[cfg(not(feature = "nogc_lock_free"))]
 use crate::policy::immortalspace::ImmortalSpace as NoGCImmortalSpace;
@@ -57,9 +58,12 @@ impl<VM: VMBinding> Plan for NoGC<VM> {
         scheduler: &Arc<MMTkScheduler<VM>>,
     ) {
         self.base.gc_init(heap_size, vm_map, scheduler);
-
+        
         // FIXME correctly initialize spaces based on options
         self.nogc_space.init(&vm_map);
+        info!("info1");
+        bumpallocator::map_meta_space_for_chunk();
+        info!("info2");
     }
 
     fn base(&self) -> &BasePlan<VM> {
@@ -115,7 +119,6 @@ impl<VM: VMBinding> NoGC<VM> {
             &mut heap,
             &NOGC_CONSTRAINTS,
         );
-
         NoGC {
             nogc_space,
             base: BasePlan::new(vm_map, mmapper, options, heap, &NOGC_CONSTRAINTS),
